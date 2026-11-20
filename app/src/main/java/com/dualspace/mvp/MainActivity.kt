@@ -1,10 +1,9 @@
 package com.dualspace.mvp
 
 import android.app.Activity
-import android.app.admin.DevicePolicyManager
 import android.content.ActivityNotFoundException
-import android.content.Intent
 import android.os.Bundle
+import android.os.Process
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -13,6 +12,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.BusinessCenter
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -34,160 +39,241 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun Dashboard(bridge: ProfileBridge) {
-    var message by remember { mutableStateOf("") }
-    var query by remember { mutableStateOf("") }
-    var packageName by remember { mutableStateOf("") }
-    val wexPackage = "com.efsllc.efsmobileapp"
+    var message by remember { mutableStateOf<String?>(null) }
+    var search by remember { mutableStateOf("") }
     var refresh by remember { mutableIntStateOf(0) }
+    var showConsent by remember { mutableStateOf(false) }
+    var showAllApps by remember { mutableStateOf(false) }
+    val myUser = Process.myUserHandle()
     val apps = remember(refresh) { bridge.appsByProfile() }
-    val personalUser = android.os.Process.myUserHandle()
-    val grouped = apps.groupBy { it.packageName }
-    val wexCopies = apps.filter { it.packageName == wexPackage }
-    val currentCopy = wexCopies.firstOrNull { it.user == personalUser }
-    val otherCopy = wexCopies.firstOrNull { it.user != personalUser }
-    val launcher = rememberLauncherForActivityResult(
+    val profiles = remember(refresh) { bridge.visibleProfiles() }
+    val wexSelf = apps.firstOrNull {
+        it.packageName == ProfileBridge.WEX_PACKAGE && it.user == myUser
+    }
+    val wexOther = apps.firstOrNull {
+        it.packageName == ProfileBridge.WEX_PACKAGE && it.user != myUser
+    }
+
+    val provision = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         message = if (result.resultCode == Activity.RESULT_OK) {
-            "Android accepted the provisioning request. Open the Work tab when setup finishes."
+            "Android completed the setup dialog. Refresh to verify Work profile access."
         } else {
-            "Provisioning ended or was cancelled. Check whether a work profile was created."
+            "Profile setup ended. Refresh and check whether Android created a Work tab."
         }
         refresh++
+    }
+
+    if (showConsent) {
+        AlertDialog(
+            onDismissRequest = { showConsent = false },
+            title = { Text("Create a separate Work profile?") },
+            text = {
+                Text(
+                    "Android will create a separately managed profile. DualSpace will act as its profile administrator. " +
+                    "Its apps and local data are isolated from Personal. Removing this profile later permanently deletes its local app data. " +
+                    "Do not continue if your phone already has a company-managed Work profile."
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showConsent = false
+                    try {
+                        provision.launch(bridge.managedProfileProvisioningIntent())
+                    } catch (_: ActivityNotFoundException) {
+                        message = "Android has no supported provisioning activity."
+                    } catch (e: RuntimeException) {
+                        message = "Cannot start provisioning: ${e.localizedMessage ?: "Android refused setup"}"
+                    }
+                }) { Text("Continue to Android") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConsent = false }) { Text("Cancel") }
+            }
+        )
     }
 
     Scaffold { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(20.dp),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                Text("DUALSPACE", style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Black)
-                Text("Two logins. One Android phone.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(12.dp))
+                Text("DUALSPACE", style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                Text("Two secure sessions. One phone.", style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(8.dp))
                 Text(
-                    if (bridge.isWorkOwner) "WORK PROFILE ADMIN" else "PERSONAL DASHBOARD",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    if (bridge.isWorkOwner) "WORK PROFILE CONTROLLER"
+                    else "PERSONAL ACCOUNT DASHBOARD",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium
                 )
             }
             item {
-                Card(shape = RoundedCornerShape(18.dp)) {
-                    Column(
-                        Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text("WEX CardControl | Love's + Pilot", fontWeight = FontWeight.Bold)
-                        Text("Separate WEX CardControl sign-ins. Set Love's in the Personal copy and Pilot in the Work copy. These labels are reminders, not automatic card selection.")
+                Card(shape = RoundedCornerShape(20.dp)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("WEX CardControl", style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold)
+                        Text("Love's and Pilot", style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary)
+                        Text(
+                            "Love's is your Personal sign-in; Pilot is your Work sign-in. " +
+                            "These labels do not select, activate, or change either fuel card."
+                        )
                         if (bridge.isWorkOwner) {
-                            Button(onClick = {
-                                message = bridge.installInWorkProfile(wexPackage)
-                                refresh++
-                            }) { Text("Install WEX CardControl in Work") }
-                            Text("If installation fails, a supported Work-profile app store may be needed. Never share your card PIN with DualSpace.", style = MaterialTheme.typography.bodySmall)
-                        }
-                        if (!bridge.isWorkOwner) {
+                            CopyStatus("Pilot (Work)", wexSelf != null)
                             Button(
-                                enabled = currentCopy != null,
+                                modifier = Modifier.fillMaxWidth(),
                                 onClick = {
-                                    currentCopy?.let { message = bridge.launch(it) ?: "Opened Love's copy" }
+                                    message = wexSelf?.let { bridge.launch(it) }
+                                        ?: bridge.openWorkStore()
                                 }
-                            ) { Text("Open Love's (Personal)") }
-                            OutlinedButton(
-                                enabled = otherCopy != null,
+                            ) {
+                                Icon(Icons.Outlined.BusinessCenter, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (wexSelf != null) "Open Pilot WEX" else "Find WEX in Work Store")
+                            }
+                            if (wexSelf == null) {
+                                OutlinedButton(
+                                    onClick = { message = bridge.installIfAffiliated(ProfileBridge.WEX_PACKAGE) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Try system install (affiliated devices only)") }
+                            }
+                        } else {
+                            CopyStatus("Love's (Personal)", wexSelf != null)
+                            Button(
                                 onClick = {
-                                    otherCopy?.let { message = bridge.launch(it) ?: "Opened Pilot copy" }
-                                }
-                            ) { Text("Open Pilot (Work)") }
-                            Text(
-                                when {
-                                    currentCopy == null -> "First install WEX CardControl in your Personal profile from Google Play."
-                                    otherCopy == null -> "Next create a Work profile and install the second WEX CardControl there."
-                                    else -> "Both launchable copies detected. Sign into the correct WEX account in each."
+                                    message = wexSelf?.let { bridge.launch(it) }
+                                        ?: "Install WEX CardControl in Personal from Google Play."
                                 },
+                                enabled = wexSelf != null,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Outlined.AccountCircle, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Open Love's WEX")
+                            }
+                            CopyStatus("Pilot (Work)", wexOther != null)
+                            OutlinedButton(
+                                onClick = { message = wexOther?.let { bridge.launch(it) } },
+                                enabled = wexOther != null,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Outlined.BusinessCenter, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Open Pilot WEX")
+                            }
+                            if (wexOther == null) Text(
+                                "To set up Pilot, open the Work-badged DualSpace icon and install WEX through its Work store.",
                                 style = MaterialTheme.typography.bodySmall
                             )
-                        } else {
-                            OutlinedButton(enabled = currentCopy != null, onClick = {
-                                currentCopy?.let { message = bridge.launch(it) ?: "Opened WEX CardControl in Work" }
-                            }) { Text("Open WEX (Work / Pilot)") }
                         }
                         Text(
-                            "Only use this with your authorized fleet accounts. WEX must allow the app and both logins to operate. Cardless fueling, location and push notifications require real-device testing.",
-                            style = MaterialTheme.typography.bodySmall
+                            "DualSpace never collects WEX card numbers, PINs or passwords. " +
+                            "WEX compatibility and fueling functions must be tested on your device.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
             item {
                 Card(shape = RoundedCornerShape(18.dp)) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Profile setup", fontWeight = FontWeight.Bold)
-                        Text(if (bridge.isWorkOwner) "This is the managed-profile controller. Install a second app copy here." else
-                            "Create a managed Work profile with Android's own consent screen. This can only succeed on supported, eligible devices.")
-                        if (!bridge.isWorkOwner) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Profile status", style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold)
+                        Text(if (bridge.isWorkOwner) "Work profile owner active" else
+                            if (profiles.size > 1) "Android reports more than one accessible profile"
+                            else "No second accessible profile detected")
+                        if (!bridge.isWorkOwner && profiles.size <= 1) {
                             Button(
-                                enabled = bridge.supportsWorkProfiles,
-                                onClick = {
-                                    try { launcher.launch(bridge.managedProfileProvisioningIntent()) }
-                                    catch (e: Exception) { message = "Provisioning unavailable: ${e.localizedMessage}" }
-                                }
-                            ) { Text("Create Work Profile") }
-                        } else {
-                            OutlinedTextField(
-                                value = packageName,
-                                onValueChange = { packageName = it.trim() },
-                                label = { Text("Package ID from personal app") },
-                                singleLine = true,
+                                onClick = { showConsent = true },
+                                enabled = bridge.canProvision(),
                                 modifier = Modifier.fillMaxWidth()
+                            ) { Text("Set up Second Space") }
+                            if (!bridge.canProvision()) Text(
+                                "Work-profile provisioning is unavailable or restricted on this device.",
+                                style = MaterialTheme.typography.bodySmall
                             )
-                            Button(onClick = {
-                                message = bridge.installInWorkProfile(packageName)
-                                refresh++
-                            }) { Text("Enable Second Copy") }
+                        }
+                        OutlinedButton(onClick = { refresh++ }) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Refresh installed apps")
                         }
                     }
                 }
             }
-            if (message.isNotBlank()) {
-                item { Text(message, color = MaterialTheme.colorScheme.primary) }
+            if (message != null) {
+                item {
+                    Card(colors = CardDefaults.cardColors(containerColor =
+                        MaterialTheme.colorScheme.surfaceVariant)) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(message.orEmpty())
+                            TextButton(onClick = { message = null }) { Text("Dismiss") }
+                        }
+                    }
+                }
             }
             item {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    label = { Text("Search installed apps") },
+                OutlinedButton(
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = { refresh++ }) { Text("Refresh apps") }
-                Text("Each app card shows the package ID. Copy it into the DualSpace icon under your Work tab to enable a second copy.",
-                    style = MaterialTheme.typography.bodySmall)
+                    onClick = { showAllApps = !showAllApps }
+                ) { Text(if (showAllApps) "Hide all apps" else "Show installed apps") }
             }
-            items(grouped.entries.filter { (_, entries) ->
-                entries.any { it.name.contains(query, ignoreCase = true) || it.packageName.contains(query, ignoreCase = true) }
-            }.sortedBy { it.value.first().name.lowercase() }) { (pkg, versions) ->
-                Card(shape = RoundedCornerShape(14.dp)) {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(versions.first().name, fontWeight = FontWeight.Bold)
-                        Text(pkg, style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        versions.forEach { app ->
-                            val isSelfUser = app.user == personalUser
-                            OutlinedButton(onClick = {
-                                message = bridge.launch(app) ?: "Launched ${app.name}"
-                            }) { Text(if (isSelfUser) "Open this profile's copy" else "Open other profile's copy") }
+            if (showAllApps) {
+                item {
+                    OutlinedTextField(
+                        value = search,
+                        onValueChange = { search = it },
+                        label = { Text("Search available apps") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                items(apps.filter { it.name.contains(search, true) || it.packageName.contains(search, true) }) { app ->
+                    Card {
+                        Row(
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(app.name, fontWeight = FontWeight.Bold)
+                                Text(app.packageName, style = MaterialTheme.typography.labelSmall)
+                            }
+                            TextButton(onClick = { message = bridge.launch(app) }) { Text("Open") }
                         }
                     }
                 }
             }
             item {
-                Text("Safety: Never remove an existing Work profile to test this app. Removing a profile deletes its local app data. This MVP does not remove profiles or read app passwords.",
-                    style = MaterialTheme.typography.bodySmall)
+                HorizontalDivider()
+                Text(
+                    "Safety: Do not remove an existing company Work profile. Android deletes the " +
+                    "profile's local data when it is removed. This app does not manage or transfer WEX credentials.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun CopyStatus(title: String, installed: Boolean) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(
+            if (installed) Icons.Outlined.CheckCircle else Icons.Outlined.Info,
+            contentDescription = null,
+            tint = if (installed) MaterialTheme.colorScheme.primary
+                   else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            "$title: ${if (installed) "Installed" else "Not detected"}",
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }
