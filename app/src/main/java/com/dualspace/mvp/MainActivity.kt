@@ -26,27 +26,34 @@ import androidx.compose.ui.unit.dp
 import com.dualspace.mvp.apps.ProfileBridge
 
 class MainActivity : ComponentActivity() {
+    private val lifecycleRefresh = mutableIntStateOf(0)
+
+    override fun onResume() {
+        super.onResume()
+        lifecycleRefresh.intValue++
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val bridge = ProfileBridge(this)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                Dashboard(bridge)
+                Dashboard(bridge, lifecycleRefresh.intValue)
             }
         }
     }
 }
 
 @Composable
-private fun Dashboard(bridge: ProfileBridge) {
+private fun Dashboard(bridge: ProfileBridge, externalRefresh: Int) {
     var message by remember { mutableStateOf<String?>(null) }
     var search by remember { mutableStateOf("") }
     var refresh by remember { mutableIntStateOf(0) }
     var showConsent by remember { mutableStateOf(false) }
     var showAllApps by remember { mutableStateOf(false) }
     val myUser = Process.myUserHandle()
-    val apps = remember(refresh) { bridge.appsByProfile() }
-    val profiles = remember(refresh) { bridge.visibleProfiles() }
+    val apps = remember(refresh, externalRefresh) { bridge.appsByProfile() }
+    val profiles = remember(refresh, externalRefresh) { bridge.visibleProfiles() }
     val wexSelf = apps.firstOrNull {
         it.packageName == ProfileBridge.WEX_PACKAGE && it.user == myUser
     }
