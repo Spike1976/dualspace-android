@@ -87,6 +87,11 @@ class ProfileBridge(private val context: Context) {
      */
     fun openWorkStore(packageName: String = WEX_PACKAGE): String? {
         if (!isWorkOwner) return "Open DualSpace from the Work tab first."
+        return openStoreInCurrentProfile(packageName)
+    }
+
+    /** Opens the app store in the profile where this instance is running. */
+    fun openStoreInCurrentProfile(packageName: String = WEX_PACKAGE): String? {
         if (!PackageNameValidator.isValid(packageName)) return "Invalid Android package name."
         val intents = listOf(
             Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName"))
@@ -102,7 +107,11 @@ class ProfileBridge(private val context: Context) {
                 // Try next supported store route.
             }
         }
-        return "No app store is available inside this Work profile. The managed profile may not be configured for app distribution."
+        return if (isWorkOwner) {
+            "No supported store available in this Work profile. Managed Play may require organization enrollment."
+        } else {
+            "No supported store available in Personal. Install WEX CardControl from an authorized app store."
+        }
     }
 
     /**
