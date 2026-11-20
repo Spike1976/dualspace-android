@@ -16,8 +16,30 @@ android {
         versionName = "0.2.0"
     }
 
+    val releaseStorePath = System.getenv("DUALSPACE_KEYSTORE_PATH")
+    val releaseStorePassword = System.getenv("DUALSPACE_KEYSTORE_PASSWORD")
+    val releaseKeyAlias = System.getenv("DUALSPACE_KEY_ALIAS")
+    val releaseKeyPassword = System.getenv("DUALSPACE_KEY_PASSWORD")
+    val hasSigningCredentials = listOf(
+        releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword
+    ).all { !it.isNullOrBlank() }
+
+    if (hasSigningCredentials) {
+        signingConfigs {
+            create("production") {
+                storeFile = file(requireNotNull(releaseStorePath))
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasSigningCredentials) {
+                signingConfig = signingConfigs.getByName("production")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
