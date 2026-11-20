@@ -53,33 +53,22 @@ jobs:
           } >> "$GITHUB_ENV"
       - name: Test lint and build signed APK and AAB
         run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleRelease :app:bundleRelease --no-daemon
-      - name: Reject any release APK permissions
+      - name: Enforce strict release permission allowlist
         run: |
           set -euo pipefail
           AAPT="${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/35.0.0/aapt"
           APK="app/build/outputs/apk/release/app-release.apk"
           if [ ! -x "$AAPT" ] || [ ! -f "$APK" ]; then
-            echo "Cannot verify release permissions" >&2
+            echo "Cannot verify release APK permissions" >&2
             exit 1
           fi
           "$AAPT" dump permissions "$APK" | tee /tmp/dualspace-release-permissions.txt
-          unexpected="$(grep -E 'uses-permission(:|\\-sdk-23:)' /tmp/dualspace-release-permissions.txt | \
-            sed -n "s/.*name='\\([^']*\\)'.*/\\1/p" | \
-            grep -v '^com\\.dualspace\\.mvp\\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
-      - name: Upload signed release artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: DualSpace-signed-release
-          path: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/bundle/release/*.aab
-          if-no-files-found: error
-          retention-days: 30
- || true)"
-          if [ -n "$unexpected" ]; then
-            echo "SECURITY FAILURE: Unapproved permission(s): $unexpected" >&2
-            exit 1
-          fi
+          awk -F "'" '/uses-permission:/ {
+            if ($2 != "com.dualspace.mvp.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION") {
+              print "UNAPPROVED PERMISSION: " $2
+              bad=1
+            }
+          } END { exit bad }' /tmp/dualspace-release-permissions.txt
       - name: Upload signed release artifacts
         uses: actions/upload-artifact@v4
         with:
