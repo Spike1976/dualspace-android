@@ -153,10 +153,9 @@ private fun Dashboard(bridge: ProfileBridge, externalRefresh: Int) {
                             CopyStatus("Love's (Personal)", wexSelf != null)
                             Button(
                                 onClick = {
-                                    message = wexSelf?.let { bridge.launch(it) }
-                                        ?: "Install WEX CardControl in Personal from Google Play."
+                                    message = if (wexSelf != null) bridge.launch(wexSelf)
+                                        else bridge.openStoreInCurrentProfile()
                                 },
-                                enabled = wexSelf != null,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Icon(Icons.Outlined.AccountCircle, contentDescription = null)
