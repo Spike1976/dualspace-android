@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException
 import android.os.Bundle
 import android.os.Process
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,6 +36,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         val bridge = ProfileBridge(this)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
