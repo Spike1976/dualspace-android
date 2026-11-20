@@ -5,7 +5,6 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 
 class DualSpaceAdminReceiver : DeviceAdminReceiver() {
     override fun onProfileProvisioningComplete(context: Context, intent: Intent) {
@@ -17,9 +16,8 @@ class DualSpaceAdminReceiver : DeviceAdminReceiver() {
             // Enable it so the user can see and use their Work tab.
             try {
                 policy.setProfileEnabled(admin)
-                Log.i("DualSpace", "Managed profile enabled")
-            } catch (e: SecurityException) {
-                Log.e("DualSpace", "Unable to enable managed profile", e)
+            } catch (_: SecurityException) {
+                // No sensitive profile details are logged.
             }
         }
     }
