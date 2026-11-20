@@ -37,10 +37,14 @@ private fun Dashboard(bridge: ProfileBridge) {
     var message by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
     var packageName by remember { mutableStateOf("") }
+    val wexPackage = "com.efsllc.efsmobileapp"
     var refresh by remember { mutableIntStateOf(0) }
     val apps = remember(refresh) { bridge.appsByProfile() }
     val personalUser = android.os.Process.myUserHandle()
     val grouped = apps.groupBy { it.packageName }
+    val wexCopies = apps.filter { it.packageName == wexPackage }
+    val currentCopy = wexCopies.firstOrNull { it.user == personalUser }
+    val otherCopy = wexCopies.firstOrNull { it.user != personalUser }
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -68,6 +72,54 @@ private fun Dashboard(bridge: ProfileBridge) {
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
+            }
+            item {
+                Card(shape = RoundedCornerShape(18.dp)) {
+                    Column(
+                        Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("WEX CardControl | Love's + Pilot", fontWeight = FontWeight.Bold)
+                        Text("Separate WEX CardControl sign-ins. Set Love's in the Personal copy and Pilot in the Work copy. These labels are reminders, not automatic card selection.")
+                        if (bridge.isWorkOwner) {
+                            Button(onClick = {
+                                message = bridge.installInWorkProfile(wexPackage)
+                                refresh++
+                            }) { Text("Install WEX CardControl in Work") }
+                            Text("If installation fails, a supported Work-profile app store may be needed. Never share your card PIN with DualSpace.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (!bridge.isWorkOwner) {
+                            Button(
+                                enabled = currentCopy != null,
+                                onClick = {
+                                    currentCopy?.let { message = bridge.launch(it) ?: "Opened Love's copy" }
+                                }
+                            ) { Text("Open Love's (Personal)") }
+                            OutlinedButton(
+                                enabled = otherCopy != null,
+                                onClick = {
+                                    otherCopy?.let { message = bridge.launch(it) ?: "Opened Pilot copy" }
+                                }
+                            ) { Text("Open Pilot (Work)") }
+                            Text(
+                                when {
+                                    currentCopy == null -> "First install WEX CardControl in your Personal profile from Google Play."
+                                    otherCopy == null -> "Next create a Work profile and install the second WEX CardControl there."
+                                    else -> "Both launchable copies detected. Sign into the correct WEX account in each."
+                                },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        } else {
+                            OutlinedButton(enabled = currentCopy != null, onClick = {
+                                currentCopy?.let { message = bridge.launch(it) ?: "Opened WEX CardControl in Work" }
+                            }) { Text("Open WEX (Work / Pilot)") }
+                        }
+                        Text(
+                            "Only use this with your authorized fleet accounts. WEX must allow the app and both logins to operate. Cardless fueling, location and push notifications require real-device testing.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
             }
             item {
                 Card(shape = RoundedCornerShape(18.dp)) {
