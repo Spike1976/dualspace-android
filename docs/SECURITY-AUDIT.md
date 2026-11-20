@@ -15,7 +15,7 @@ DualSpace must **never see or capture** WEX card numbers, PINs, passwords, autho
 - Provisioning components are protected with `android.permission.BIND_DEVICE_ADMIN`.
 - Main activity remains exported solely as the standard OS launcher entrypoint.
 - Generic user-facing errors are used, rather than showing exception messages that may contain profile metadata.
-- CI tests, lint, build, and a permission audit fail if the built APK requests any Android runtime or install-time permissions.
+- CI tests, lint, build, and a permission audit reject any permission other than AndroidX's self-defined, signature-protected `com.dualspace.mvp.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` receiver safeguard. No network, location, camera, or WEX-data permissions are allowed.
 
 ## Limits that cannot be solved by this app
 - Android's OS, any company that administers a different work profile, the WEX app itself, and WEX's servers remain separate trust boundaries.
@@ -28,7 +28,7 @@ DualSpace must **never see or capture** WEX card numbers, PINs, passwords, autho
 
 ## Pre-release test protocol
 1. On a spare device, install release-signed DualSpace and provision the work profile.
-2. Build with CI and inspect APK's merged permissions. Any permission request fails the release gate.
+2. Build with CI and inspect APK's merged permissions. Any permission other than the app-private AndroidX dynamic receiver safeguard fails the release gate.
 3. Confirm both WEX logins have separate data across reboot and work-profile pausing.
 4. Inspect logcat while using both apps; verify no account details are printed by DualSpace.
 5. Run device security, overlays, accessibility and screenshot tests, and check Android screen-recorder behavior.
