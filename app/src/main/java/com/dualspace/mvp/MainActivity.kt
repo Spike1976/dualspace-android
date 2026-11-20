@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.os.Bundle
 import android.os.Process
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
@@ -11,7 +12,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
@@ -37,6 +37,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Protect only DualSpace UI from ordinary screenshots and screen casting.
+        // This does NOT control screenshots inside WEX itself.
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val bridge = ProfileBridge(this)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
@@ -49,12 +52,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun Dashboard(bridge: ProfileBridge, externalRefresh: Int) {
     var message by remember { mutableStateOf<String?>(null) }
-    var search by remember { mutableStateOf("") }
     var refresh by remember { mutableIntStateOf(0) }
     var showConsent by remember { mutableStateOf(false) }
-    var showAllApps by remember { mutableStateOf(false) }
     val myUser = Process.myUserHandle()
-    val apps = remember(refresh, externalRefresh) { bridge.appsByProfile() }
+    val apps = remember(refresh, externalRefresh) { bridge.wexCopies() }
     val profiles = remember(refresh, externalRefresh) { bridge.visibleProfiles() }
     val wexSelf = apps.firstOrNull {
         it.packageName == ProfileBridge.WEX_PACKAGE && it.user == myUser
@@ -222,37 +223,6 @@ private fun Dashboard(bridge: ProfileBridge, externalRefresh: Int) {
                         Column(Modifier.padding(14.dp)) {
                             Text(message.orEmpty())
                             TextButton(onClick = { message = null }) { Text("Dismiss") }
-                        }
-                    }
-                }
-            }
-            item {
-                OutlinedButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = { showAllApps = !showAllApps }
-                ) { Text(if (showAllApps) "Hide all apps" else "Show installed apps") }
-            }
-            if (showAllApps) {
-                item {
-                    OutlinedTextField(
-                        value = search,
-                        onValueChange = { search = it },
-                        label = { Text("Search available apps") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                items(apps.filter { it.name.contains(search, true) || it.packageName.contains(search, true) }) { app ->
-                    Card {
-                        Row(
-                            Modifier.fillMaxWidth().padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(app.name, fontWeight = FontWeight.Bold)
-                                Text(app.packageName, style = MaterialTheme.typography.labelSmall)
-                            }
-                            TextButton(onClick = { message = bridge.launch(app) }) { Text("Open") }
                         }
                     }
                 }
