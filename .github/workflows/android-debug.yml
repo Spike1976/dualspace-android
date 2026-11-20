@@ -43,6 +43,20 @@ jobs:
           gradle-version: '8.11.1'
       - name: Unit tests and debug APK
         run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --stacktrace
+      - name: Enforce zero runtime-permission policy
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          AAPT="${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/35.0.0/aapt"
+          if [ ! -f "$APK" ] || [ ! -x "$AAPT" ]; then
+            echo "Missing compiled APK or Android permission auditor" >&2
+            exit 1
+          fi
+          "$AAPT" dump permissions "$APK" | tee /tmp/dualspace-permissions.txt
+          if grep -Eq "uses-permission(:|\-sdk-23:)" /tmp/dualspace-permissions.txt; then
+            echo "SECURITY FAILURE: DualSpace must request zero Android permissions." >&2
+            exit 1
+          fi
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
