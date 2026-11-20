@@ -50,23 +50,21 @@ class ProfileBridge(private val context: Context) {
     fun visibleProfiles(): List<UserHandle> =
         try { launcher.profiles } catch (_: RuntimeException) { listOf(Process.myUserHandle()) }
 
-    fun appsByProfile(): List<AvailableApp> =
-        try {
-            visibleProfiles().flatMap { user ->
-                try {
-                    launcher.getActivityList(null, user).map {
-                        AvailableApp(it.componentName.packageName, it.label.toString(), user)
-                    }
-                } catch (_: RuntimeException) {
-                    emptyList()
+    /**
+     * Minimize metadata exposure. Only query the known WEX package by exact name
+     * in the profiles Android has already permitted this launcher to see.
+     * Never enumerate unrelated installed apps.
+     */
+    fun wexCopies(): List<AvailableApp> =
+        visibleProfiles().flatMap { user ->
+            try {
+                launcher.getActivityList(WEX_PACKAGE, user).map {
+                    AvailableApp(WEX_PACKAGE, it.label.toString(), user)
                 }
-            }.distinctBy { it.packageName to it.user }
-                .filterNot { it.packageName == context.packageName }
-                .sortedWith(compareBy({ it.name.lowercase() }, { it.packageName }))
-        } catch (_: RuntimeException) { emptyList() }
-
-    fun findApp(packageName: String, user: UserHandle): AvailableApp? =
-        appsByProfile().firstOrNull { it.packageName == packageName && it.user == user }
+            } catch (_: RuntimeException) {
+                emptyList()
+            }
+        }.distinctBy { it.user }
 
     fun launch(app: AvailableApp): String? =
         try {
@@ -77,7 +75,7 @@ class ProfileBridge(private val context: Context) {
         } catch (e: SecurityException) {
             "Android blocked access to this profile. Open the app from its Work tab."
         } catch (e: RuntimeException) {
-            "Could not launch this copy: ${e.localizedMessage ?: "Android launch error"}"
+            "Android could not launch this copy. Check whether the profile is paused."
         }
 
     /**
@@ -134,7 +132,7 @@ class ProfileBridge(private val context: Context) {
         } catch (_: SecurityException) {
             "Android denied package installation for this profile."
         } catch (e: RuntimeException) {
-            "Package installation failed: ${e.localizedMessage ?: "Unknown error"}"
+            "Android could not install the app in this profile."
         }
     }
 
