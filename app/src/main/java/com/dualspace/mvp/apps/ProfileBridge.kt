@@ -111,7 +111,7 @@ class ProfileBridge(private val context: Context) {
      */
     fun installIfAffiliated(packageName: String): String {
         if (!isWorkOwner) return "Must run in the managed profile."
-        if (!isValidPackageName(packageName)) return "Invalid package name."
+        if (!PackageNameValidator.isValid(packageName)) return "Invalid package name."
         if (!policy.isAffiliatedUser) {
             return "This consumer Work profile is not affiliated. Use the Work Play Store if available."
         }
