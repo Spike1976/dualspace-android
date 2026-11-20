@@ -53,6 +53,20 @@ jobs:
           } >> "$GITHUB_ENV"
       - name: Test lint and build signed APK and AAB
         run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleRelease :app:bundleRelease --no-daemon
+      - name: Reject any release APK permissions
+        run: |
+          set -euo pipefail
+          AAPT="${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/35.0.0/aapt"
+          APK="app/build/outputs/apk/release/app-release.apk"
+          if [ ! -x "$AAPT" ] || [ ! -f "$APK" ]; then
+            echo "Cannot verify release permissions" >&2
+            exit 1
+          fi
+          "$AAPT" dump permissions "$APK" | tee /tmp/dualspace-release-permissions.txt
+          if grep -Eq "uses-permission(:|\\-sdk-23:)" /tmp/dualspace-release-permissions.txt; then
+            echo "SECURITY FAILURE: Unexpected permission in signed release" >&2
+            exit 1
+          fi
       - name: Upload signed release artifacts
         uses: actions/upload-artifact@v4
         with:
