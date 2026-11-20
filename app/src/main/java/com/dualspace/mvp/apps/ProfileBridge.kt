@@ -87,7 +87,7 @@ class ProfileBridge(private val context: Context) {
      */
     fun openWorkStore(packageName: String = WEX_PACKAGE): String? {
         if (!isWorkOwner) return "Open DualSpace from the Work tab first."
-        if (!isValidPackageName(packageName)) return "Invalid Android package name."
+        if (!PackageNameValidator.isValid(packageName)) return "Invalid Android package name."
         val intents = listOf(
             Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName"))
                 .setPackage("com.android.vending"),
@@ -129,6 +129,4 @@ class ProfileBridge(private val context: Context) {
         }
     }
 
-    private fun isValidPackageName(value: String): Boolean =
-        Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+").matches(value)
 }
