@@ -43,7 +43,7 @@ jobs:
           gradle-version: '8.11.1'
       - name: Unit tests and debug APK
         run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease --no-daemon --stacktrace
-      - name: Enforce zero runtime-permission policy
+      - name: Enforce strict APK permission allowlist
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
@@ -53,8 +53,20 @@ jobs:
             exit 1
           fi
           "$AAPT" dump permissions "$APK" | tee /tmp/dualspace-permissions.txt
-          if grep -Eq "uses-permission(:|\-sdk-23:)" /tmp/dualspace-permissions.txt; then
-            echo "SECURITY FAILURE: DualSpace must request zero Android permissions." >&2
+          # AndroidX generates this signature-protected, app-private receiver permission.
+          # It cannot access WEX data and must not be confused with device permissions.
+          unexpected="$(grep -E 'uses-permission(:|\\-sdk-23:)' /tmp/dualspace-permissions.txt | \
+            sed -n "s/.*name='\\([^']*\\)'.*/\\1/p" | \
+            grep -v '^com\\.dualspace\\.mvp\\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DualSpace-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+ || true)"
+          if [ -n "$unexpected" ]; then
+            echo "SECURITY FAILURE: Unapproved permissions: $unexpected" >&2
             exit 1
           fi
       - name: Upload debug APK
